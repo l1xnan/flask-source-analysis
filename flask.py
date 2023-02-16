@@ -29,7 +29,8 @@ from werkzeug.exceptions import HTTPException, InternalServerError
 
 # from secure_cookie.cookie import SecureCookie
 class SecureCookie:
-    pass
+    def load_cookie(self, *args, **kwargs):
+        pass
 
 
 # utilities we import from Werkzeug and Jinja2 that are unused
@@ -217,46 +218,31 @@ class Flask(object):
     jinja_options = dict(autoescape=True, extensions=['jinja2.ext.autoescape', 'jinja2.ext.with_'])
 
     def __init__(self, package_name):
-        #: the debug flag.  Set this to `True` to enable debugging of
-        #: the application.  In debug mode the debugger will kick in
-        #: when an unhandled exception ocurrs and the integrated server
-        #: will automatically reload the application if changes in the
-        #: code are detected.
+        # 调试标志
         self.debug = False
 
-        #: the name of the package or module.  Do not change this once
-        #: it was set by the constructor.
+        # 包名称，一般为 `__name__`
         self.package_name = package_name
 
-        #: where is the app root located?
-        self.root_path = _get_package_path(self.package_name)
+        # 应用程序根目录在
+        self.root_path = "."  # _get_package_path(self.package_name)
 
-        #: a dictionary of all view functions registered.  The keys will
-        #: be function names which are also used to generate URLs and
-        #: the values are the function objects themselves.
-        #: to register a view function, use the :meth:`route` decorator.
+        # 所有已注册视图函数的字典.
+        # key 是函数名称.
+        # 使用 :meth:`route` 装饰器注册.
         self.view_functions = {}
 
-        #: a dictionary of all registered error handlers.  The key is
-        #: be the error code as integer, the value the function that
-        #: should handle that error.
-        #: To register a error handler, use the :meth:`errorhandler`
-        #: decorator.
+        # 所有已注册错误处理程序的字典. key 是错误码.
         self.error_handlers = {}
 
-        #: a list of functions that should be called at the beginning
-        #: of the request before request dispatching kicks in.  This
-        #: can for example be used to open database connections or
-        #: getting hold of the currently logged in user.
-        #: To register a function here, use the :meth:`before_request`
-        #: decorator.
+        # 在请求开始时调用的函数列表.
+        # 可以处理数据库连接或者登陆.
+        # 使用 :meth:`before_request` 装饰器注册
         self.before_request_funcs = []
 
-        #: a list of functions that are called at the end of the
-        #: request.  Tha function is passed the current response
-        #: object and modify it in place or replace it.
-        #: To register a function here use the :meth:`after_request`
-        #: decorator.
+        # 在请求结束时调用的函数列表.
+        # 该函数被传递给当前响应对象，并就地修改或替换它.
+        # 使用 :meth:`after_request` 装饰器注册.
         self.after_request_funcs = []
 
         #: a list of functions that are called without arguments
@@ -274,7 +260,7 @@ class Flask(object):
                 target = (self.package_name, 'static')
             else:
                 target = os.path.join(self.root_path, 'static')
-            self.wsgi_app = SharedDataMiddleware(self.wsgi_app, {self.static_path: target})
+            # self.wsgi_app = SharedDataMiddleware(self.wsgi_app, {self.static_path: target})
 
         #: the Jinja2 environment.  It is created from the
         #: :attr:`jinja_options` and the loader that is returned
@@ -304,18 +290,8 @@ class Flask(object):
             context.update(func())
 
     def run(self, host='localhost', port=5000, **options):
-        """Runs the application on a local development server.  If the
-        :attr:`debug` flag is set the server will automatically reload
-        for code changes and show a debugger in case an exception happened.
-
-        :param host: the hostname to listen on.  set this to ``'0.0.0.0'``
-                     to have the server available externally as well.
-        :param port: the port of the webserver
-        :param options: the options to be forwarded to the underlying
-                        Werkzeug server.  See :func:`werkzeug.run_simple`
-                        for more information.
-        """
-        from werkzeug import run_simple
+        """主运行函数"""
+        from werkzeug.serving import run_simple
 
         if 'debug' in options:
             self.debug = options.pop('debug')
@@ -381,97 +357,31 @@ class Flask(object):
             session.save_cookie(response, self.session_cookie_name)
 
     def add_url_rule(self, rule, endpoint, **options):
-        """Connects a URL rule.  Works exactly like the :meth:`route`
-        decorator but does not register the view function for the endpoint.
+        """关联一个URL规则.  一般使用 `route`.
 
-        Basically this example::
+        下面示例::
 
             @app.route('/')
             def index():
                 pass
 
-        Is equivalent to the following::
+        等价于::
 
             def index():
                 pass
             app.add_url_rule('index', '/')
             app.view_functions['index'] = index
-
-        :param rule: the URL rule as string
-        :param endpoint: the endpoint for the registered URL rule.  Flask
-                         itself assumes the name of the view function as
-                         endpoint
-        :param options: the options to be forwarded to the underlying
-                        :class:`~werkzeug.routing.Rule` object
         """
         options['endpoint'] = endpoint
         options.setdefault('methods', ('GET',))
         self.url_map.add(Rule(rule, **options))
 
     def route(self, rule, **options):
-        """A decorator that is used to register a view function for a
-        given URL rule.  Example::
+        """注册路由装饰器. Example::
 
             @app.route('/')
             def index():
                 return 'Hello World'
-
-        Variables parts in the route can be specified with angular
-        brackets (``/user/<username>``).  By default a variable part
-        in the URL accepts any string without a slash however a different
-        converter can be specified as well by using ``<converter:name>``.
-
-        Variable parts are passed to the view function as keyword
-        arguments.
-
-        The following converters are possible:
-
-        =========== ===========================================
-        `int`       accepts integers
-        `float`     like `int` but for floating point values
-        `path`      like the default but also accepts slashes
-        =========== ===========================================
-
-        Here some examples::
-
-            @app.route('/')
-            def index():
-                pass
-
-            @app.route('/<username>')
-            def show_user(username):
-                pass
-
-            @app.route('/post/<int:post_id>')
-            def show_post(post_id):
-                pass
-
-        An important detail to keep in mind is how Flask deals with trailing
-        slashes.  The idea is to keep each URL unique so the following rules
-        apply:
-
-        1. If a rule ends with a slash and is requested without a slash
-           by the user, the user is automatically redirected to the same
-           page with a trailing slash attached.
-        2. If a rule does not end with a trailing slash and the user request
-           the page with a trailing slash, a 404 not found is raised.
-
-        This is consistent with how web servers deal with static files.  This
-        also makes it possible to use relative link targets safely.
-
-        The :meth:`route` decorator accepts a couple of other arguments
-        as well:
-
-        :param rule: the URL rule as string
-        :param methods: a list of methods this rule should be limited
-                        to (``GET``, ``POST`` etc.).  By default a rule
-                        just listens for ``GET`` (and implicitly ``HEAD``).
-        :param subdomain: specifies the rule for the subdoain in case
-                          subdomain matching is in use.
-        :param strict_slashes: can be used to disable the strict slashes
-                               setting for this rule.  See above.
-        :param options: other options to be forwarded to the underlying
-                        :class:`~werkzeug.routing.Rule` object.
         """
 
         def decorator(f):
@@ -482,22 +392,11 @@ class Flask(object):
         return decorator
 
     def errorhandler(self, code):
-        """A decorator that is used to register a function give a given
-        error code.  Example::
+        """注册错误码装饰器.  Example::
 
             @app.errorhandler(404)
             def page_not_found():
                 return 'This page does not exist', 404
-
-        You can also register a function as error handler without using
-        the :meth:`errorhandler` decorator.  The following example is
-        equivalent to the one above::
-
-            def page_not_found():
-                return 'This page does not exist', 404
-            app.error_handlers[404] = page_not_found
-
-        :param code: the code as integer for the handler
         """
 
         def decorator(f):
@@ -507,12 +406,12 @@ class Flask(object):
         return decorator
 
     def before_request(self, f):
-        """Registers a function to run before each request."""
+        """注册一个在每个请求之前运行的函数"""
         self.before_request_funcs.append(f)
         return f
 
     def after_request(self, f):
-        """Register a function to be run after each request."""
+        """注册一个在每个请求之后运行的函数"""
         self.after_request_funcs.append(f)
         return f
 
